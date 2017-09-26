@@ -34,7 +34,6 @@ package org.apache.spark.groupon.metrics
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import java.util.function
 
 import com.codahale.metrics.{Clock, Counter, Gauge, Histogram, Meter, Metric, MetricRegistry, Reservoir, Timer}
 import org.apache.spark.{SparkContext, SparkException}
@@ -72,7 +71,7 @@ import org.apache.spark.rpc.{RpcEndpoint, RpcEnv}
   * if we had access to Spark's [[MetricRegistry]], but this is currently a private field in the
   * [[org.apache.spark.metrics.MetricsSystem]].
   *
-  * @param sparkContext app's [[SparkContext]]
+  * @param sparkContext    app's [[SparkContext]]
   * @param metricNamespace namespace of metrics used for publishing.
   */
 private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
@@ -105,38 +104,38 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     case message: Any => throw new SparkException(s"$self does not implement 'receive' for message: $message")
   }
 
-  def compute[T <: Metric](metricName: String, newMetric: => T): java.util.function.Function[String, Metric] = new function.Function[String, Metric] {
-    override def apply(t: String): Metric = {
-      registerMetricSource(metricName, newMetric)
-      newMetric
-    }
+  def compute[T <: Metric](metricName: String, newMetric: => T) = {
+    registerMetricSource(metricName, newMetric)
+    newMetric
   }
 
   def getOrCreateCounter(metricName: String): Counter =
-    metrics.computeIfAbsent(metricName, compute(metricName, new Counter)
+    metrics.putIfAbsent(
+      metricName,
+      compute(metricName, new Counter)
     ).asInstanceOf[Counter]
 
 
   def getOrCreateHistogram(metricName: String, reservoirClass: Class[_ <: Reservoir]): Histogram =
-    metrics.computeIfAbsent(
+    metrics.putIfAbsent(
       metricName,
       compute(metricName, new Histogram(reservoirClass.newInstance()))
     ).asInstanceOf[Histogram]
 
 
   def getOrCreateMeter(metricName: String): Meter =
-    metrics.computeIfAbsent(metricName, compute(metricName, new Meter)
+    metrics.putIfAbsent(metricName, compute(metricName, new Meter)
     ).asInstanceOf[Meter]
 
 
   def getOrCreateTimer(metricName: String, reservoirClass: Class[_ <: Reservoir], clockClass: Class[_ <: Clock]): Timer =
-    metrics.computeIfAbsent(
+    metrics.putIfAbsent(
       metricName,
       compute(metricName, new Timer(reservoirClass.newInstance(), clockClass.newInstance()))
     ).asInstanceOf[Timer]
 
   def getOrCreateGauge(metricName: String): Gauge[AnyVal] = {
-    metrics.computeIfAbsent(
+    metrics.putIfAbsent(
       metricName,
       compute(metricName, new Gauge[AnyVal] {
         override def getValue: AnyVal = lastGaugeValues.get(metricName)
@@ -152,12 +151,13 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     * [[MetricRegistry]] must be created for each new [[Metric]] that needs to be published.
     *
     * @param metricName name of the Metric
-    * @param metric [[Metric]] instance to be published
+    * @param metric     [[Metric]] instance to be published
     */
-  def registerMetricSource(metricName: String, metric: Metric): Unit =  {
+  def registerMetricSource(metricName: String, metric: Metric): Unit = {
     sparkContext.env.metricsSystem.registerSource(
       new Source {
         override val sourceName = s"${sparkContext.appName}.$metricNamespace"
+
         override def metricRegistry: MetricRegistry = {
           val metrics = new MetricRegistry
           metrics.register(metricName, metric)
