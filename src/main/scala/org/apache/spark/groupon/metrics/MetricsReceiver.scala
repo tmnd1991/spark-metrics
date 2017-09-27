@@ -112,7 +112,7 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     case message: Any => throw new SparkException(s"$self does not implement 'receive' for message: $message")
   }
 
-  def getOrCreateCounter(metricName: String): Counter = {
+  def getOrCreateCounter(metricName: String): Counter = metrics.synchronized {
     metrics.getOrElseUpdate(metricName, {
       val counter = new Counter()
       registerMetricSource(metricName, counter)
@@ -120,7 +120,7 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     }).asInstanceOf[Counter]
   }
 
-  def getOrCreateHistogram(metricName: String, reservoirClass: Class[_ <: Reservoir]): Histogram = {
+  def getOrCreateHistogram(metricName: String, reservoirClass: Class[_ <: Reservoir]): Histogram = metrics.synchronized{
     metrics.getOrElseUpdate(metricName, {
       val histogram = new Histogram(reservoirClass.newInstance())
       registerMetricSource(metricName, histogram)
@@ -136,7 +136,7 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     }).asInstanceOf[Meter]
   }
 
-  def getOrCreateTimer(metricName: String, reservoirClass: Class[_ <: Reservoir], clockClass: Class[_ <: Clock]): Timer = {
+  def getOrCreateTimer(metricName: String, reservoirClass: Class[_ <: Reservoir], clockClass: Class[_ <: Clock]): Timer = metrics.synchronized{
     metrics.getOrElseUpdate(metricName, {
       val timer = new Timer(reservoirClass.newInstance(), clockClass.newInstance())
       registerMetricSource(metricName, timer)
@@ -144,7 +144,7 @@ private[metrics] class MetricsReceiver(val sparkContext: SparkContext,
     }).asInstanceOf[Timer]
   }
 
-  def getOrCreateGauge(metricName: String): Gauge[AnyVal] = {
+  def getOrCreateGauge(metricName: String): Gauge[AnyVal] = metrics.synchronized {
     metrics.getOrElseUpdate(metricName, {
       val gauge = new Gauge[AnyVal] {
         override def getValue: AnyVal = {
